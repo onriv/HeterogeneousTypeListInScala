@@ -9,6 +9,7 @@ object HList {
   }
 
   final case class HCons[H, T <: HList](head: H, tail: T) extends HList {
+    type FullType = H :: T
 
     type Expand[IfHCons <: Up, IfHNil <: Up, Up] = IfHCons
 
@@ -17,6 +18,8 @@ object HList {
       InitAndLastViewHNil[H],
       InitAndLastView
     ]
+
+    def AsInitAndLast(implicit in: FullType => FullType#AsInitAndLast) = in(this)
 
     def ::[T](v: T) = HCons(v, this)
 
@@ -54,6 +57,12 @@ object HList {
     def last = v.last
     def init = HCons(x, v.init) // 为何这里不能写 x :: v.init
   }
+
+  implicit def initLast0[H](x : H :: HNil) = new InitAndLastViewHNil[H](x.head)
+  implicit def initLastN[H, T <: HList, Prev <: InitAndLastView](x: H :: T)(implicit prev: T => Prev) = {
+    new InitAndLastViewHCons[H, Prev](x.head, prev(x.tail))
+  }
+
 
   type ::[H, T <: HList] = HCons[H, T]
   val :: = HCons
