@@ -4,12 +4,15 @@
 
 object HList {
   sealed trait HList {
+    type FullType <: HList
+
     type AsInitAndLast <: InitAndLastView
     type Append[T] <: AppendView
     type Join[H <: HList] <: JoinView
     type ViewAt[Idx <: Nat] <: IndexedView
 
     type Expand[IfHCons <: Up, IfHNil <: Up, Up] <: Up
+
   }
 
   final case class HCons[H, T <: HList](head: H, tail: T) extends HList {
@@ -41,7 +44,6 @@ object HList {
     def Append[T](t: T)(implicit in: (FullType, T) => FullType#Append[T]) = in(this, t)
     def Join[T <: HList](t: T)(implicit in: (FullType, T) => FullType#Join[T]) = in(this, t)
     def :::[T <: HList](t: T)(implicit in: (T, FullType) => T#Join[FullType]) = in(t, this).get
-    def :::(t: HNil) = this
     def ViewAt[Idx <: Nat](implicit in: FullType => FullType#ViewAt[Idx]) = in(this)
 
     def ::[T](v: T) = HCons(v, this)
@@ -50,6 +52,7 @@ object HList {
   }
 
   final class HNil extends HList {
+    type FullType = HNil
 
     type Expand[IfHCons <: Up, IfHNil <: Up, Up] = IfHNil
 
@@ -63,7 +66,7 @@ object HList {
 
     def ::[T](v: T) = HCons(v, this)
 
-    def :::[T <: HList](t: T) = t
+    def :::[T <: HList](t: T)(implicit in: (T, FullType) => T#Join[FullType]) = t
 
     override def toString: String = "HNil"
   }
@@ -132,7 +135,7 @@ object HList {
     def get = HCons(h, x.get)
   }
 
-  implicit def join0[H, T <: HList](x : H :: HNil, t: T) = new JoinViewN(x.head, new JoinView0(t))
+  implicit def join0[T <: HList](x : HNil, t: T) = new JoinView0[T](t)
   implicit def joinN[H, T1 <: HList, T <: HList, Prev <: JoinView](x : H :: T1, t: T)(implicit prev : (T1, T) => Prev)
   = new JoinViewN(x.head, prev(x.tail, t))
 
@@ -142,6 +145,7 @@ object HList {
     type At
     def fold[R](f: (Before, At, After) => R): R
     def get = fold( (_, value, _) => value)
+
   }
 
   class HListView0[H, T <: HList](val list : H :: T) extends IndexedView {
