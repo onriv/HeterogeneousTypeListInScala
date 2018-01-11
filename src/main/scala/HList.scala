@@ -19,12 +19,18 @@ object HList {
       (x : H :: T, t: T1)(implicit prev: (T, T1) => Prev) =
     new AppendViewN(x.head, prev(x.tail, t))
 
+  implicit def join0[T <: HList](x : HNil, t: T) = new JoinView0(t)
+  implicit def joinN[H, T1 <: HList, T <: HList, Prev <: JoinView](
+      x : H :: T1, t: T)(implicit prev : (T1, T) => Prev)
+    = new JoinViewN(x.head, prev(x.tail, t))
+
 }
 
 sealed trait HList {
   type Expand[IfHCons <: Up, IfHNil <: Up, Up] <: Up
   type AsInitAndLast <: InitAndLastView
   type Append[T] <: AppendView
+  type Join[H <: HList] <: JoinView
 }
 
 final case class HCons[H, T <: HList](head: H, tail: T) extends HList {
@@ -42,10 +48,21 @@ final case class HCons[H, T <: HList](head: H, tail: T) extends HList {
 //    AppendView0[T1],
 //    AppendView
 //    ]
+  type Join[H1 <: HList] = T#Expand[
+    JoinViewN[H, T#Join[H1]],
+    JoinViewN[H, JoinView0[H1]],
+    JoinView
+    ]
   def asInitAndLast(implicit in: FullType => FullType#AsInitAndLast): FullType#AsInitAndLast = in(this)
   def init(implicit in: FullType => FullType#AsInitAndLast) = in(this).init
   def last(implicit in: FullType => FullType#AsInitAndLast) = in(this).last
   def append[T](t: T)(implicit in: (FullType, T) => FullType#Append[T]) = in(this, t)
+  def Join[T <: HList](t: T)(
+    implicit in: (FullType, T) => FullType#Join[T]
+  ) = in(this, t)
+  def :::[T <: HList](t: T)(
+    implicit in: (T, FullType) => T#Join[FullType]
+  ) = in(t, this).get
   def ::[T](v: T) = HCons(v, this)
   override def toString: String = s"${head} :: ${tail}"
 }
@@ -55,6 +72,9 @@ final class HNil extends HList {
   def ::[T](v: T) = HCons(v, this)
   type Append[T] = AppendView0[T]
   def append[T](t: T) = new AppendView0[T](t)
+  type Join[H <: HList] = JoinView0[H]
+  def Join[T <: HList](t: T) = new JoinView0[T](t)
+  def :::[T <: HList](t: T) = t
   override def toString: String = "HNil"
 }
 
@@ -97,6 +117,23 @@ class AppendViewN[H, A <: AppendView](val h: H, val a: A) extends AppendView {
   import HList._
   type Appended = H :: A#Appended
   def get = HCons(h, a.get)
+}
+
+sealed trait JoinView {
+  type Joined <: HList
+  def get: Joined
+}
+
+class JoinView0[T <: HList](val t: T) extends JoinView {
+  type Joined = T
+  def get = t
+}
+
+class JoinViewN[H, NextJoinView <: JoinView](
+    val h: H, x: NextJoinView) extends JoinView {
+  import HList._
+  type Joined = H :: NextJoinView#Joined
+  def get = HCons(h, x.get)
 }
 
 object Main1 extends App {
