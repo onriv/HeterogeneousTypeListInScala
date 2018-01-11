@@ -34,11 +34,14 @@ object HList {
 }
 
 sealed trait HList {
+  type FullType <: HList
   type Expand[IfHCons <: Up, IfHNil <: Up, Up] <: Up
   type AsInitAndLast <: InitAndLastView
   type Append[T] <: AppendView
   type Join[H <: HList] <: JoinView
   type ViewAt[Idx <: Nat] <: IndexedView
+  def :::[T <: HList](t: T)( implicit in: (T, FullType) => T#Join[FullType]):
+    T#Join[FullType]#Joined
 }
 
 final case class HCons[H, T <: HList](head: H, tail: T) extends HList {
@@ -82,13 +85,15 @@ final case class HCons[H, T <: HList](head: H, tail: T) extends HList {
 }
 
 final class HNil extends HList {
+  type FullType = HNil
   type Expand[IfHCons <: Up, IfHNil <: Up, Up] = IfHNil
   def ::[T](v: T) = HCons(v, this)
   type Append[T] = AppendView0[T]
   def append[T](t: T) = new AppendView0[T](t)
   type Join[H <: HList] = JoinView0[H]
   def Join[T <: HList](t: T) = new JoinView0[T](t)
-  def :::[T <: HList](t: T) = t
+  def :::[T <: HList](t: T)(implicit in: (T, FullType) => T#Join[FullType])
+    = in(t, this).get
   override def toString: String = "HNil"
 }
 
@@ -151,11 +156,31 @@ class JoinViewN[H, NextJoinView <: JoinView](
 }
 
 sealed trait IndexedView {
+  import HList._
   type Before <: HList
   type After <: HList
   type At
   def fold[R](f: (Before, At, After) => R): R
   def get = fold( (_, value, _) => value)
+
+  def remove(implicit in: (Before, After) => Before#Join[After]) = fold {
+    (before, _, after) => in(before, after).get
+  }
+
+  def insertBefore[B](x: B)(implicit in: (Before, B :: At :: After) =>
+    Before#Join[B::At::After]) = fold {
+    (before, current, after) => in(before, HCons(x, HCons(current, after))).get
+  }
+
+  def insertAfter[B](x: B)(implicit in: (Before, At :: B :: After) =>
+    Before#Join[At::B::After]) = fold {
+    (before, current, after) => in(before, HCons(current, HCons(x, after))).get
+  }
+
+  def replace[B](x: B)(implicit in: (Before, B :: After) =>
+    Before#Join[B::After]) = fold {
+    (before, _, after) => in(before, HCons(x, after)).get
+  }
 }
 
 class HListView0[H, T <: HList](val list : HCons[H, T]) extends IndexedView {
