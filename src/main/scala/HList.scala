@@ -44,7 +44,7 @@ final case class HCons[H, T <: HList](head: H, tail: T) extends HList {
 //    ]
   def asInitAndLast(implicit in: FullType => FullType#AsInitAndLast): FullType#AsInitAndLast = in(this)
   def init(implicit in: FullType => FullType#AsInitAndLast) = in(this).init
-//  def last(implicit in: FullType => FullType#AsInitAndLast): AsInitAndLast#last = in(this).last
+  def last(implicit in: FullType => FullType#AsInitAndLast) = in(this).last
   def append[T](t: T)(implicit in: (FullType, T) => FullType#Append[T]) = in(this, t)
   def ::[T](v: T) = HCons(v, this)
   override def toString: String = s"${head} :: ${tail}"
@@ -77,7 +77,7 @@ class InitAndLastViewHCons[H, NextLastView <: InitAndLastView](
     val x: H, val v: NextLastView) extends InitAndLastView {
   import HList._
   type init = H :: NextLastView#init
-  type last = NextLastView#last
+  type last = v.last
   def last = v.last
   def init = HCons(x, v.init) // 为何这里不能写 x :: v.init
 }
